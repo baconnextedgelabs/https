@@ -1,37 +1,91 @@
-## Welcome to GitHub Pages
+<video id="selfView" width="320" height="240" autoplay muted></video>
 
-You can use the [editor on GitHub](https://github.com/baconnextedgelabs/https/edit/master/index.md) to maintain and preview the content for your website in Markdown files.
+<button id="call">Call</button>
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+<video id="remoteView" width="320" height="240" autoplay muted></video>
 
-### Markdown
+<script>
+    let address = 'ws://192.168.43.79:9999/';
+    let origin = 'client' + +new Date();
+    let ws = new WebSocket(address);
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+    ws.addEventListener('open', function () {
+        console.log('Connected');
+    });
 
-```markdown
-Syntax highlighted code block
+    ws.addEventListener('close', function () {
+        console.log('Connection lost');
+    });
 
-# Header 1
-## Header 2
-### Header 3
+    ws.addEventListener('message', function (e) {
+        let data = e.data;
+        let [name, type, msg] = data.split('|');
+        msg = JSON.parse(msg);
+        if (!pc)
+            start(false);
+        if (name !== origin) {
+            if (type === 'sdp') {
+                console.log('get', 'setRemoteDescription');
+                pc.setRemoteDescription(new RTCSessionDescription(msg));
+            } else if (type === 'candidate') {
+                console.log('get', 'addIceCandidate', name, origin);
+                pc.addIceCandidate(new RTCIceCandidate(msg));
+            }
+        }
+    });
 
-- Bulleted
-- List
+    let send = function () {
+        let [origin, type, msg] = Array.prototype.slice.call(arguments);
+        ws.send(origin + '|' + type + '|' + JSON.stringify(msg));
+        console.log('sent', origin, type);
+    }
 
-1. Numbered
-2. List
+    // ws.send('123123');
 
-**Bold** and _Italic_ and `Code` text
 
-[Link](url) and ![Image](src)
-```
+    // RTCPeerConnection
 
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
+    var configuration = {
+        iceServers: [{
+            urls: "stun:23.21.150.121"
+        }, {
+            urls: "stun:stun.l.google.com:19302"
+        }]
+    };
+    var pc;
 
-### Jekyll Themes
+    function start(isCaller) {
+        pc = new RTCPeerConnection(configuration);
+        // send any ice candidates to the other peer
+        pc.onicecandidate = function (evt) {
+            send(origin, 'candidate', evt.candidate);
+        };
+        // once remote stream arrives, show it in the remote video element
+        pc.ontrack = function (evt) {
+            // remoteView.src = URL.createObjectURL(evt.streams[0]);
+            remoteView.srcObject = evt.streams[0];
+        };
+        // get the local stream, show it in the local video element and send it
+        navigator.mediaDevices.getUserMedia({
+            "audio": true,
+            "video": true
+        }).then((stream) => {
+            // selfView.src = URL.createObjectURL(stream);
+            selfView.srcObject = stream;
+            pc.addStream(stream);
+            if (isCaller)
+                pc.createOffer().then((desc) => gotDescription(desc));
+            else
+                pc.createAnswer().then((desc) => gotDescription(desc));
 
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/baconnextedgelabs/https/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+            function gotDescription(desc) {
+                console.log('setLocalDescription');
+                pc.setLocalDescription(desc);
+                send(origin, 'sdp', desc);
+            }
+        });
+    }
+    call.addEventListener('click', () => {
+        start(true);
+    });
+</script>
