@@ -98,7 +98,7 @@
             });
         }
 
-        deviceIdIndex = (deviceIdList.length === 1) ? (deviceIdIndex + 1) % deviceIdList.length : 0;
+        deviceIdIndex = (deviceIdList.length === 1) ? 0 : (deviceIdIndex + 1) % deviceIdList.length;
 
         console.log('deviceIdIndex', deviceIdIndex, deviceIdList);
 
