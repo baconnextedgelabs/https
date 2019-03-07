@@ -1,21 +1,55 @@
-<video id="selfView" width="320" height="240" autoplay muted></video>
+<video id="selfView" autoplay muted></video>
 
-<button id="call">Call</button>
+<video id="remoteView" autoplay muted></video>
 
-<video id="remoteView" width="320" height="240" autoplay muted></video>
+<style>
+    body {
+        background-color: #000;
+    }
 
-<script src="lib/peerjs.min.js"></script>
+    #selfView {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    #remoteView {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        max-width: 20%;
+        max-height: 20%;
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@0.3.20/dist/peer.min.js"></script>
 <script>
     var selfView = document.querySelector("#selfView");
     var remoteView = document.querySelector("#remoteView");
-    var localStream,
-        peer,
-        remoteId = 'AAAAbaconAAAA';
+    var localStream;
+    var peer;
+    var remoteId = 'AAAAbaconAAAA';
+    var deviceIdList = [];
+    var deviceIdIndex = 0;
+
+    navigator.mediaDevices.enumerateDevices().then(function (devices) {
+        deviceIdList = devices.filter(({
+            kind
+        }) => kind === 'videoinput').map(({
+            deviceId
+        }) => deviceId);
+    });
 
     navigator.getUserMedia({
-        video: true,
+        video: {
+            deviceId: {
+                exact: deviceIdList[deviceIdIndex]
+            }
+        },
         audio: false
     }, function (localStream) {
+        window.stream = localStream;
         selfView.srcObject = localStream;
 
         var call = peer.call(remoteId, localStream);
@@ -49,11 +83,41 @@
         });
     });
 
-
     peer.on('connection', function (conn) {
         console.log('peer connection', conn);
     });
+
     peer.on('error', function (err) {
         console.log('peer err', err);
+    });
+
+    selfView.addEventListener('click', function () {
+        if (window.stream) {
+            window.stream.getTracks().forEach(function (track) {
+                track.stop();
+            });
+        }
+
+        deviceIdIndex = (deviceIdList.length === 1) ? (deviceIdIndex + 1) % deviceIdList.length : 0;
+
+        console.log('deviceIdIndex', deviceIdIndex, deviceIdList);
+
+        navigator.getUserMedia({
+            video: {
+                deviceId: {
+                    exact: deviceIdList[deviceIdIndex]
+                }
+            },
+            audio: false
+        }, function (localStream) {
+            selfView.srcObject = localStream;
+
+            var call = peer.call(remoteId, localStream);
+            call.on('stream', function (remoteStream) {
+                remoteView.srcObject = remoteStream;
+            });
+        }, function (err) {
+            console.log('error', err);
+        });
     });
 </script>
